@@ -218,12 +218,18 @@ class Summerizer(object):
         if scheme == 0:
             life_time = min(self.MinLT + int(eta*(fitness/avg_fitness)), self.MaxLT)
         elif scheme == 1:
-            life_time = self.MinLT + int(2*eta*(fitness - min_fitness)/(max_fitness - min_fitness))
+            try:
+                life_time = self.MinLT + int(2*eta*(fitness - min_fitness)/(max_fitness - min_fitness))
+            except:
+                life_time = 2
         else:
-            if fitness <= avg_fitness:
-                life_time = self.MinLT + int(eta*(fitness - min_fitness)/(avg_fitness - min_fitness))
-            else:
-                life_time = int(0.5*(self.MinLT + self.MaxLT) + eta*(fitness - avg_fitness)/(max_fitness - avg_fitness))
+            try:
+                if fitness <= avg_fitness:
+                    life_time = self.MinLT + int(eta*(fitness - min_fitness)/(avg_fitness - min_fitness))
+                else:
+                    life_time = int(0.5*(self.MinLT + self.MaxLT) + eta*(fitness - avg_fitness)/(max_fitness - avg_fitness))
+            except:
+                life_time = 2
         return life_time
 
 
@@ -270,7 +276,7 @@ class Summerizer(object):
             population = self.generate_population(self.population_size)
         population = self.evaluate_age(population, self.scheme)
 
-        max_sent = int(0.3*len(self.sentences))
+        max_sent = 4
         if len(self.sentences) < 4:
             max_sent = len(self.sentences)       
         new_population = []
@@ -435,7 +441,7 @@ class Summerizer(object):
         c2 = 0.9
         n_iterations = 30 
 
-        max_sent = int(0.3*len(self.sentences))
+        max_sent = 4
         if len(self.sentences) < 4:
             max_sent = len(self.sentences) 
 
@@ -534,7 +540,7 @@ def start_run(processID, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, sub_storie
     for example in sub_stories:
         start_time = time.time()
         # raw_sentences = re.split("\n\s+", example[0])
-        raw_sents = re.split("\n", example[0])
+        raw_sents = re.split(" . ", example[0]) 
         df = pd.DataFrame(raw_sents, columns =['raw'])
         df['preprocess_raw'] = df['raw'].apply(lambda x: clean_text(x))
         newdf = df.loc[(df['preprocess_raw'] != 'None')]
@@ -616,11 +622,11 @@ def a_process_do(processID, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, sub_sto
         start_run(processID, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, next_part, save_path_for_valid, 0, scheme_had_max_value)
        
 
-def multiprocess(num_process, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, stories, save_path):
+def multiprocess(num_process, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, stories, save_path, order_params, scheme):
     processes = []
 
-    # num_docs_per_loop = math.floor(len(stories)/5)
-    n = 100
+    n = math.floor(len(stories)/5)
+    # n = 100
     set_of_docs = [stories[i:i + n] for i in range(0, len(stories), n)] 
 
     # import pdb
@@ -628,16 +634,23 @@ def multiprocess(num_process, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, stori
 
     # for i in range(num_process):
     for index, sub_stories in enumerate(set_of_docs):
-        if index == 5:
-            p = multiprocessing.Process(target=a_process_do, args=(
-                index, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE,sub_stories, save_path[-1], set_of_docs[0]))
-            processes.append(p)
-            p.start()
-        else:
-            p = multiprocessing.Process(target=a_process_do, args=(
-                index, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE,sub_stories, save_path[index], set_of_docs[index+1]))
-            processes.append(p)
-            p.start()
+        # if index == 5:
+        #     p = multiprocessing.Process(target=a_process_do, args=(
+        #         index, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE,sub_stories, save_path[-1], set_of_docs[0]))
+        #     processes.append(p)
+        #     p.start()
+        # else:
+        #     p = multiprocessing.Process(target=a_process_do, args=(
+        #         index, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE,sub_stories, save_path[index], set_of_docs[index+1]))
+        #     processes.append(p)
+        #     p.start()
+
+        #(processID, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, sub_stories, save_path, order_params, scheme)
+        p = multiprocessing.Process(target=start_run, args=(
+            index, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE,sub_stories, save_path[index], order_params, scheme))
+        processes.append(p)
+        p.start()
+
         
     for p in processes:
         p.join()
@@ -645,7 +658,7 @@ def multiprocess(num_process, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, stori
 
 def evaluate_rouge(hyp_path):
     hyp = hyp_path
-    raw_ref = 'duc2002_summaries_I'
+    raw_ref = 'abstracts'
     FJoin = os.path.join
     files_hyp = [FJoin(hyp, f) for f in os.listdir(hyp)]
     files_raw_ref = [FJoin(raw_ref, f) for f in os.listdir(hyp)]
@@ -702,7 +715,7 @@ def main():
     MUTATE_RATE = 0.4
     #NUM_PICKED_SENTS = 4
 
-    directory = 'duc2002_documents_2'
+    directory = 'stories'
     save_path=['hyp1', 'hyp2', 'hyp3', 'hyp4', 'hyp5', 'hyp6']
 
     if not os.path.exists('hyp1'):
@@ -715,8 +728,8 @@ def main():
         os.makedirs('hyp4')
     if not os.path.exists('hyp5'):
         os.makedirs('hyp5')
-    if not os.path.exists('hyp6'):
-        os.makedirs('hyp6')
+    # if not os.path.exists('hyp6'):
+    #     os.makedirs('hyp6')
 
 
 
@@ -730,10 +743,12 @@ def main():
     # list of documents
     stories = load_docs(directory)
     start_time = time.time()
-
     
-    multiprocess(6, POPU_SIZE, MAX_GEN, CROSS_RATE,
-                 MUTATE_RATE, stories, save_path)
+    order_params = 0 #chon bo tham so feature
+    scheme = 0 #chon option 1 2 3 de thay doi
+    
+    multiprocess(5, POPU_SIZE, MAX_GEN, CROSS_RATE,
+                 MUTATE_RATE, stories, save_path, order_params, scheme)
     # start_run(1, POPU_SIZE, MAX_GEN, CROSS_RATE, MUTATE_RATE, stories, save_path[0], 0, 0)
 
     print("--- %s mins ---" % ((time.time() - start_time)/(60.0*len(stories))))
